@@ -67,7 +67,7 @@ class GIW_Publisher{
             'post_parent' => $parent
         ));
 
-        
+
         foreach( $posts as $index => $post ){
 
             $result[ $post->post_name ] = array(
@@ -116,7 +116,7 @@ class GIW_Publisher{
             }
 
         }
-        
+
         // Check if item props exist, in case of dir posts
         if( $item_props ){
             $item_content = $this->repository->get_item_content( $item_props );
@@ -128,11 +128,19 @@ class GIW_Publisher{
                 return false;
             }
 
+            $re = '/(?<=\n\n)\$\$\n([\S\s]*?\n)\$\$/m';
+            $item_content = preg_replace_callback($re, function($matches) {
+                $escaped = addslashes($matches[0]);
+                return str_replace("\n", "<br/>", $escaped);
+            }, $item_content);
+
+
             $parsed_content = $this->parsedown->parse_content( $item_content );
 
             $front_matter = $parsed_content[ 'front_matter' ];
             $html = $this->parsedown->text( $parsed_content[ 'markdown' ] );
             $content = GIW_Utils::process_content_template( $this->content_template, $html );
+            $content = str_replace('\\', '\\\\', $content);
 
             // Get post details
             $post_title = empty( $front_matter[ 'title' ] ) ? $item_slug : $front_matter[ 'title' ];
@@ -147,16 +155,17 @@ class GIW_Publisher{
             $custom_fields = $front_matter[ 'custom_fields' ];
 
             $post_date = '';
-            
-            // fix for keeping the existing post created date. existing time is updated by one hour so that the change is saved.
-			if($post_id){
-				$date_format = get_option( 'Y-m-d H:i:s' );
-				$post_date = get_the_date( $date_format, $post_id );
-				$date=date_create($post_date);
+
+            // fix for keeping the existing post created date. existing time is updated by one hour so that the change
+            // is saved.
+            if($post_id){
+                $date_format = get_option( 'Y-m-d H:i:s' );
+                $post_date = get_the_date( $date_format, $post_id );
+                $date=date_create($post_date);
                 date_add($date,date_interval_create_from_date_string("1 hours"));
-				$post_date= date_format($date,"Y-m-d H:i:s");
-			}
-            
+                $post_date= date_format($date,"Y-m-d H:i:s");
+            }
+
             if( !empty( $front_matter[ 'post_date' ] ) ){
                 $post_date = GIW_Utils::process_date( $front_matter[ 'post_date' ] );
             }
@@ -216,9 +225,9 @@ class GIW_Publisher{
             'page_template' => $page_template,
             'comment_status' => $comment_status,
             'menu_order' => $menu_order,
-            'meta_input' => $meta_input,			
-			'post_modified'     => current_time( 'mysql' ),
-    	    'post_modified_gmt' => current_time( 'mysql', 1 )
+            'meta_input' => $meta_input,
+            'post_modified'     => current_time( 'mysql' ),
+            'post_modified_gmt' => current_time( 'mysql', 1 )
         );
 
         $new_post_id = wp_insert_post( $post_details );
@@ -309,7 +318,7 @@ class GIW_Publisher{
                     $this->create_post( $directory_post, $item_slug, $index_props, $parent );
 
                 }else{
-                    
+
                     // If index posts exists for the directory
                     if( array_key_exists( 'index', $item_props[ 'items' ] ) ){
                         $index_props = $item_props[ 'items' ][ 'index' ];
@@ -381,7 +390,7 @@ class GIW_Publisher{
 
             $uploaded_image_url = wp_get_attachment_url( $uploaded_image_id );
 
-            // Check if image is uploaded correctly and 
+            // Check if image is uploaded correctly and
             if( !empty( $uploaded_image_url ) ){
 
                 GIW_Utils::log( 'Image is uploaded [' . $uploaded_image_url . ']. ID: ' . $uploaded_image_id );
@@ -402,11 +411,11 @@ class GIW_Publisher{
             }
 
         }
-        
+
     }
 
     /**
-     * Uploads image from a URL. A modified version of `media_sideload_image` function 
+     * Uploads image from a URL. A modified version of `media_sideload_image` function
      * to honor authentication while fetching image data with GET from private repositories
      */
     public function upload_image( $image_props, $post_id = 0, $desc = null, $return_type = 'html' ) {
@@ -425,7 +434,7 @@ class GIW_Publisher{
             if ( ! $matches ) {
                 return new WP_Error( 'image_sideload_failed', __( 'Unsupported image format.' ) );
             }
-    
+
             $file_array = array();
             $file_array['name'] = wp_basename( $matches[0] );
 
@@ -450,36 +459,36 @@ class GIW_Publisher{
             if ( is_wp_error( $file_array['tmp_name'] ) ) {
                 return $file_array['tmp_name'];
             }
-    
+
             // Loads the downloaded image file to the library. Temporary file is deleted here after upload.
             $id = media_handle_sideload( $file_array, $post_id, $desc );
-    
+
             // If error storing permanently, unlink.
             if ( is_wp_error( $id ) ) {
                 @unlink( $file_array['tmp_name'] );
                 return $id;
             }
-    
+
             // Store the original attachment source in meta.
             add_post_meta( $id, '_source_url', $file );
-    
+
             // If attachment ID was requested, return it.
             if ( 'id' === $return_type ) {
                 return $id;
             }
-    
+
             $src = wp_get_attachment_url( $id );
         }
-    
+
         // Finally, check to make sure the file has been saved, then return the HTML.
         if ( ! empty( $src ) ) {
             if ( 'src' === $return_type ) {
                 return $src;
             }
-    
+
             $alt = isset( $desc ) ? esc_attr( $desc ) : '';
             $html = "<img src='$src' alt='$alt' />";
-    
+
             return $html;
         } else {
             return new WP_Error( 'image_sideload_failed' );
